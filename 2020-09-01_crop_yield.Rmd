@@ -1,0 +1,624 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+```{r warning=FALSE}
+library(tidytuesdayR)
+library(tidyverse)
+library(stringr)
+library(DataExplorer)
+```
+
+```{r warning=FALSE}
+# Get the Data
+
+# Read in with tidytuesdayR package 
+# Install from CRAN via: install.packages("tidytuesdayR")
+# This loads the readme and all the datasets for the week of interest
+
+# Either ISO-8601 date or year/week works!
+
+# Import data from tidytuesday
+tuesdata <- tidytuesdayR::tt_load('2020-09-01')
+# tuesdata <- tidytuesdayR::tt_load(2020, week = 36)
+# 
+# key_crop_yields <- tuesdata$key_crop_yields
+# 
+# # Or read in the data manually
+# 
+# key_crop_yields <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-09-01/key_crop_yields.csv')
+# fertilizer <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-09-01/cereal_crop_yield_vs_fertilizer_application.csv')
+# tractors <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-09-01/cereal_yields_vs_tractor_inputs_in_agriculture.csv')
+# land_use <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-09-01/land_use_vs_yield_change_in_cereal_production.csv')
+# arable_land <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-09-01/arable_land_pin.csv')
+
+# load("~/OneDrive/R script/crop_yield.RData")
+
+
+key_crop_yields %>%
+  filter(Entity %in% c("Japan","China","United States", "Brazil","Indonesia", "India", "Pakistan", "Nigeria", "Bangladesh", "Russia", "Mexico")) %>% 
+  select(-(2)) %>% 
+  mutate(Year = as.factor(Year),
+         Entity = as.factor(Entity)) %>% plot_boxplot(by = c("Year"))
+  
+
+create_report(
+    config = configure_report(
+      add_plot_bar = FALSE
+    )
+  )
+
+
+key_crop_yields %>%
+  filter(Code != ""& Entity != "World") %>% 
+  select(-(2)) %>% 
+  create_report(
+    config = configure_report(
+      add_plot_bar = FALSE
+    )
+  )
+
+key_crop_yields %>%
+  filter(Entity == "China") %>%
+  select(-(2)) %>% 
+  plot_boxplot(by = "Year")
+
+```
+
+```{r}
+
+key_crop_yields <- tuesdata$key_crop_yields
+# Check the data
+glimpse(key_crop_yields)
+
+
+key_crop_yields %>% 
+  select(-Code,-Year) %>% 
+  group_by(Entity) %>% 
+  summarise_each(
+    funs(mean)
+  ) %>% 
+  arrange(desc(`Wheat (tonnes per hectare)`)) %>% 
+  .$Entity %>% head(10) -> 
+  wheat_yield_top
+
+
+continent_list <- c("Europe", "Asia", "Africa", "Oceania", "Americas")
+
+key_crop_yields %>% 
+  filter(Entity %in% c("Japan","China","United States", "India")) %>% 
+  ggplot(., aes(x = Year, y = `Rice (tonnes per hectare)`, color = Entity)) + 
+  geom_point(size = .1) + 
+  geom_smooth(method= 'lm') + 
+  theme_bw()
+
+Europe_list <-
+  c(
+    "Belgium",
+    "Netherlands",
+    "Ireland",
+    "United Kingdom",
+    "Denmark",
+    "Luxembourg",
+    "Germany",
+    "France"
+  )
+arable_land %>% 
+  filter(Entity %in% c("China","Mexico","Japan","India","Nigeria","Pakistan","United States")) %>% 
+  ggplot(., aes(x = Year, y = `Arable land needed to produce a fixed quantity of crops ((1.0 = 1961))`, color = Entity)) + 
+  geom_line() + 
+  ggthemes::theme_economist()
+
+arable_land %>% 
+  select(-Code) %>% 
+  pivot_wider(names_from = Year, values_from = `Arable land needed to produce a fixed quantity of crops ((1.0 = 1961))`) %>% 
+  as.data.frame(.) -> 
+  arable_land_wide
+
+rownames(arable_land_wide) <- arable_land_wide[,1]
+arable_land_wide
+
+arable_land_wide <- arable_land_wide[,-1]
+glimpse(arable_land_wide)
+
+base::apply(arable_land_wide, 1, mean) %>% 
+  as.data.frame() %>% 
+  arrange(.,.) %>% 
+  tail(20) %>% rownames() -> compare_name
+compare_name
+
+
+```
+
+## Draw a wheat heatmap
+
+```{r fig.height= 15, fig.width= 10}
+
+
+require(RColorBrewer)
+require(ComplexHeatmap)
+require(circlize)
+require(digest)
+require(cluster)
+require(countrycode)
+
+
+set.seed(2021)
+yield_heatmap <- key_crop_yields %>%
+  filter(!is.na(Code)) %>%
+  select(Entity, Year, `Wheat (tonnes per hectare)`) %>%
+  spread(Year, `Wheat (tonnes per hectare)`) %>% 
+  filter(Entity != "World") %>% 
+  column_to_rownames(var = "Entity") %>% 
+  drop_na()
+
+key_crop_yields %>% 
+  filter(str_detect(Entity,"Sudan")) %>% 
+  select(Entity, Year, `Wheat (tonnes per hectare)`) %>% 
+  drop_na() %>% 
+  mutate(Entity = "Sudan") %>% 
+  arrange(Year) %>% 
+  spread(Year, `Wheat (tonnes per hectare)`) %>% 
+  column_to_rownames(var = "Entity") %>% 
+  bind_rows(yield_heatmap) -> heat
+
+
+yield_mean <- apply(heat, 2, mean) %>% data.frame(average = .) %>% mutate(year = rownames(.))
+
+
+
+rownames(heat) %>% data.frame(country = .) -> df
+df$Continent <-  countrycode(sourcevar = df[, "country"],
+                             origin = "country.name",
+                             destination = "continent")
+
+# heat %>% 
+#   mutate(country = rownames(.)) %>% 
+#   left_join(., df, by = "country") %>% 
+#   gather(year, yield, -country, -Continent ) %>% 
+#   left_join(., yield_mean, by = "year") %>% 
+#   as.tibble() %>% 
+#   tidyHeatmap::heatmap(country, year, yield, 
+#                        cluster_columns = FALSE, 
+#                        .scale = "none", 
+#                        transform = NULL,
+#                        grid::gpar(fontsize = 10, fontface = 'bold')) %>% 
+#   tidyHeatmap::add_tile(Continent) %>% 
+#   tidyHeatmap::add_bar(average)
+
+
+
+
+
+pick.col <- brewer.pal(5, 'Greens')
+
+
+ann <- data.frame(Continent = df$Continent,
+                  row.names = df$country,
+                  stringsAsFactors =  FALSE)
+colours <- list(
+  Continent = c('Africa' = '#2171B5', 'Asia' = '#6A51A3', 'Europe' = 'red2', 'Americas' = 'green3', 'Oceania' = 'orange')
+)
+
+colAnn <- HeatmapAnnotation(
+  df = ann,
+  which = 'row', # 'col' (samples) or 'row' (gene) annotation?
+  col = colours,
+  annotation_height = 0.6,
+  annotation_width = unit(1, 'cm'),
+  gap = unit(1, 'mm'),
+  annotation_legend_param = list(
+    Continent = list(
+      nrow = 5,
+      title = 'Continent',
+      title_position = 'topcenter',
+      legend_direction = 'vertical',
+      title_gp = gpar(fontsize = 12, fontface = 'bold'),
+      labels_gp = gpar(fontsize = 12, fontface = 'bold'))
+  )
+)
+
+# heat <- t(scale(t(yield_heatmap)))
+
+
+boxplotCol <- HeatmapAnnotation(
+    Average = anno_boxplot(
+      heat,
+      border = FALSE,
+      gp = gpar(fill = colorRampPalette(pick.col)(length(1:58))),
+      pch = '.',
+      size = unit(2, 'mm'),
+      axis = TRUE,
+      axis_param = list(
+        gp = gpar(fontsize = 12),
+        side = 'left')),
+      annotation_width = unit(c(2.0), 'cm'),
+      which = 'col')
+
+
+barplotCol <- HeatmapAnnotation(
+    Average = anno_barplot(
+      apply(heat, 2, mean),
+      border = TRUE,
+      gp = gpar(fill = colorRampPalette(pick.col)(length(1:58))),
+      size = unit(2, 'mm'),
+      axis = TRUE,
+      axis_param = list(
+        gp = gpar(fontsize = 12),
+        side = 'left')),
+      annotation_width = unit(c(2.0), 'cm'),
+      which = 'col')
+
+heat_anno <- HeatmapAnnotation(
+    Average = anno_lines(
+      apply(heat, 2, mean),
+      border = TRUE,
+      gp = gpar(col = "red2"),
+      size = unit(2, 'mm'),
+      axis = TRUE,
+      axis_param = list(
+        gp = gpar(fontsize = 10),
+        side = 'left')),
+    Distribution = anno_boxplot(
+      heat,
+      border = FALSE,
+      gp = gpar(fill = colorRampPalette(pick.col)(length(1:58))),
+      pch = '.',
+      size = unit(2, 'mm'),
+      axis = TRUE,
+      axis_param = list(
+        gp = gpar(fontsize = 12),
+        side = 'left')),
+      annotation_width = unit(c(2.0), 'cm'),
+      which = 'col')
+
+myCol <- colorRampPalette(c('dodgerblue', 'black', 'yellow'))(100)
+myBreaks <- seq(1, 8, length.out = 100)
+pamClusters <- cluster::pam(heat, k = 5)
+
+Heatmap(
+  heat,
+  name = 'Wheat
+  (tonnes per hectare)',
+  col = colorRamp2(myBreaks, myCol),
+  row_split = factor(pamClusters$clustering, levels = c(5,4,3,1,2)),
+  cluster_row_slices = FALSE,
+  heatmap_legend_param = list(
+    color_bar = 'continuous',
+    legend_direction = 'vertical',
+    legend_width = unit(8, 'cm'),
+    legend_height = unit(5.0, 'cm'),
+    title_position = 'topcenter',
+    title_gp = gpar(fontsize = 12, fontface = 'bold'),
+    labels_gp = gpar(fontsize = 12, fontface = 'bold')
+  ),
+  # row parameters
+  cluster_rows = TRUE,
+  show_row_dend = TRUE,
+  #row_title = 'Statistically significant genes',
+  row_title = "Cluster",
+  row_title_gp = gpar(fontsize = 10,  fontface = 'bold'),
+  row_title_rot = 90,
+  show_row_names = TRUE,
+  row_names_gp = gpar(fontsize = 10, fontface = 'bold'),
+  row_names_side = 'right',
+  row_dend_width = unit(25, 'mm'),
+  
+  # column parameters
+  cluster_columns = FALSE,
+  column_title = 'Year',
+  column_title_side = 'bottom',
+  column_title_gp = gpar(fontsize = 10, fontface = 'bold'),
+  column_title_rot = 0,
+  show_column_names = TRUE,
+  column_names_gp = gpar(fontsize = 10, fontface = 'bold'),
+  column_names_max_height = unit(10, 'cm'),
+  column_dend_height = unit(25, 'mm'),
+  # cluster methods for rows and columns
+  clustering_distance_rows = function(m) dist(m),
+    # function(x) as.dist(1 - cor(t(x))),
+  row_dend_reorder = T,
+  clustering_method_rows = 'ward.D2',
+  top_annotation = heat_anno,
+  right_annotation = colAnn
+) -> heat_map
+heat_map
+
+ht_shiny(heat_map)
+
+```
+
+# Heatmap for Rice
+
+```{r echo=FALSE, fig.height= 15, fig.width= 10}
+require(RColorBrewer)
+require(ComplexHeatmap)
+require(circlize)
+require(digest)
+require(cluster)
+require(countrycode)
+
+
+yield_heatmap <- key_crop_yields %>%
+  filter(!is.na(Code)) %>%
+  select(Entity, Year, `Rice (tonnes per hectare)`) %>%
+  spread(Year, `Rice (tonnes per hectare)`) %>% 
+  filter(Entity != "World") %>% 
+  filter(Entity != "Taiwan") %>% 
+  column_to_rownames(var = "Entity") %>% 
+  drop_na()
+
+key_crop_yields %>% 
+  filter(str_detect(Entity,"Sudan")) %>% 
+  select(Entity, Year, `Rice (tonnes per hectare)`) %>% 
+  drop_na() %>% 
+  mutate(Entity = "Sudan") %>% 
+  arrange(Year) %>% 
+  spread(Year, `Rice (tonnes per hectare)`) %>% 
+  column_to_rownames(var = "Entity") %>% 
+  bind_rows(yield_heatmap) -> heat
+heat %>% view()
+rownames(heat) %>% data.frame(country = .) -> df
+df$Continent <-  countrycode(sourcevar = df[, "country"],
+                             origin = "country.name",
+                             destination = "continent")
+pick.col <- brewer.pal(5, 'Reds')
+col.continent <- colorRampPalette(pick.col)(length(unique(df$Continent)))
+
+ann <- data.frame(Continent = df$Continent,
+                  row.names = df$country,
+                  stringsAsFactors =  FALSE)
+
+colours <- list(
+  Continent = c('Africa' = '#2171B5', 'Asia' = '#6A51A3', 'Europe' = 'red2', 'Americas' = 'green3', 'Oceania' = 'orange')
+)
+
+colAnn <- HeatmapAnnotation(
+  df = ann,
+  which = 'row', # 'col' (samples) or 'row' (gene) annotation?
+  col = colours,
+  annotation_height = 0.6,
+  annotation_width = unit(1, 'cm'),
+  gap = unit(1, 'mm'),
+  annotation_legend_param = list(
+    Continent = list(
+      nrow = 5,
+      title = 'Continent',
+      title_position = 'topcenter',
+      legend_direction = 'vertical',
+      title_gp = gpar(fontsize = 12, fontface = 'bold'),
+      labels_gp = gpar(fontsize = 12, fontface = 'bold'))
+  )
+)
+  
+
+boxplotCol <- HeatmapAnnotation(
+    Average = anno_boxplot(
+      heat,
+      border = FALSE,
+      gp = gpar(fill = '#CCCCCC'),
+      pch = '.',
+      size = unit(2, 'mm'),
+      axis = TRUE,
+      axis_param = list(
+        gp = gpar(fontsize = 12),
+        side = 'left')),
+      annotation_width = unit(c(2.0), 'cm'),
+      which = 'col')
+
+myCol <- colorRampPalette(c('dodgerblue', 'black', 'yellow'))(100)
+myBreaks <- seq(1, 8, length.out = 100)
+
+pamClusters <- cluster::pam(heat, k = 5)
+
+Heatmap(
+  heat,
+  name = 'Rice (tonnes per hectare)',
+  col = colorRamp2(myBreaks, myCol),
+  split = pamClusters$clustering,
+  cluster_row_slices = FALSE,
+  heatmap_legend_param = list(
+    color_bar = 'continuous',
+    legend_direction = 'vertical',
+    legend_width = unit(8, 'cm'),
+    legend_height = unit(5.0, 'cm'),
+    title_position = 'topcenter',
+    title_gp = gpar(fontsize = 12, fontface = 'bold'),
+    labels_gp = gpar(fontsize = 12, fontface = 'bold')
+  ),
+  # row parameters
+  cluster_rows = TRUE,
+  show_row_dend = TRUE,
+  row_title = "Cluster",
+  row_title_gp = gpar(fontsize = 10,  fontface = 'bold'),
+  row_title_rot = 90,
+  show_row_names = TRUE,
+  row_names_gp = gpar(fontsize = 10, fontface = 'bold'),
+  row_names_side = 'right',
+  row_dend_width = unit(25, 'mm'),
+  
+  # column parameters
+  cluster_columns = FALSE,
+  column_title = 'Year',
+  column_title_side = 'bottom',
+  column_title_gp = gpar(fontsize = 10, fontface = 'bold'),
+  column_title_rot = 0,
+  show_column_names = TRUE,
+  column_names_gp = gpar(fontsize = 10, fontface = 'bold'),
+  column_names_max_height = unit(10, 'cm'),
+  column_dend_height = unit(25, 'mm'),
+  # cluster methods for rows and columns
+  clustering_distance_rows = function(x)
+    as.dist(1 - cor(t(x))),
+  clustering_method_rows = 'ward.D2',
+  top_annotation = boxplotCol,
+  right_annotation = colAnn
+)
+```
+
+```{r echo=TRUE}
+library(tidyverse)
+library(maps)
+library(ggthemes)
+library(haven)
+library(ggpubr)
+library(scales)
+library(zoo)
+library(gganimate)
+library(gifski) #good rendering engine for gganimate!
+library(viridis)
+
+
+country_geo <- map_data("world")
+
+
+key_crop_yields %>%
+  select(region = Entity,
+         year = Year,
+         yield = `Wheat (tonnes per hectare)`) -> timeline_dta
+
+timeline_dta %>% 
+  spread(year, yield) %>% 
+  gather(year, yield, -region) %>% 
+  mutate(year = as.integer(year)) -> timeline_dta
+
+
+plyr::revalue(timeline_dta$region,
+       c("United States" = "USA",
+       "Congo" = "Democratic Republic of the Congo",
+       "United Kingdom" = "UK",
+       "Sudan (former)" = "Sudan")) -> timeline_dta$region
+
+
+df.map <- right_join(timeline_dta, country_geo, by = ("region" = "region"))
+
+
+map1 <- ggplot(data = df.map %>% filter(!is.na(year))) +
+  geom_polygon(aes(
+    x = long,
+    y = lat,
+    fill = yield,
+    group = group
+  ), color = "black") + 
+  expand_limits(x = df.map$long, y = df.map$lat) +
+  scale_fill_viridis(option = "viridis", direction = 1, name = "Wheat yield (tones per hectare)",
+                     guide = guide_colorbar(
+                       direction = "horizontal",
+                       barheight = unit(2, units = "mm"),
+                       barwidth = unit(100, units = "mm"),
+                       draw.ulim = FALSE,
+                       title.position = 'top',
+                       title.hjust = 0.5,
+                       title.vjust = 0.5
+                     )) +
+  theme_hc() +
+  theme(
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+    legend.position = "bottom"
+  ) +
+  xlab(" ") + ylab(" ") +
+  labs(title = "Wheat yield in {frame_time}",
+       subtitle = "Source: TidyTuesday") + 
+  transition_time(year)
+
+
+map_anim1 <- animate(map1, fps = 20, 
+                     height = 574, width = 875)
+map_anim1
+
+
+```
+
+```{r}
+library(plotly)
+
+country_geo <- read.csv("https://raw.githubusercontent.com/plotly/datasets/master/2014_world_gdp_with_codes.csv")
+
+df <- key_crop_yields %>%
+  mutate(
+    Entity = ifelse(Entity == "Sudan (former)", "Sudan", Entity),
+    Code = ifelse(Entity == "Sudan", "SDN", Code)
+  ) %>%
+  filter(!is.na(Code)) %>%
+  arrange(Entity, Year) %>% 
+  select(1:3, Yield = `Wheat (tonnes per hectare)`)
+
+g <- list(
+  showframe = F,
+  showcoastlines = T,
+  projection = list(type = 'Mercator'),
+  scope = 'China',
+  showland = T,
+  coastlinecolor = toRGB("grey80"),
+  landcolor = toRGB("grey90")
+)
+
+fig <- plot_geo(df)
+fig <- fig %>%
+  add_trace(
+    z = ~ Yield,
+    color = ~ Yield,
+    frame = ~ Year,
+    text = ~ Entity,
+    locations = ~ Code,
+    colors = "Blues"
+  ) %>% colorbar(limits = c(0, 10))
+fig <- fig %>% layout(title = 'World Wheat Yield <br>Source:Our World in Data', geo = g)
+fig
+```
+
+
+```{r}
+yield_data <- read_csv("/Users/yangshao/Downloads/Production_Crops_E_All_Data/Production_Crops_E_All_Data.csv")
+yield_data %>% glimpse()
+
+country_code <- codelist %>% 
+  select(fao,cowc)
+
+data_wheat <- yield_data %>%
+  filter(Item == "Wheat" & Element == "Yield") %>% 
+  select(-ends_with("F")) %>% 
+  rename_with(~gsub("Y","",.x)) %>% 
+  left_join(.,country_code, by = c("Area Code" = "fao")) %>% 
+  select(Area, cowc,everything()) %>% 
+  filter(!is.na(cowc)) %>% 
+  select(-(3:8)) %>% 
+  gather(Year, Yield, -Area, - cowc)
+
+g <- list(
+  showframe = F,
+  showcoastlines = T,
+  projection = list(type = 'Mercator'),
+  scope = 'China',
+  showland = T,
+  coastlinecolor = toRGB("grey80"),
+  landcolor = toRGB("grey90")
+)
+
+fig <- plot_geo(data_wheat)
+fig <- fig %>%
+  add_trace(
+    z = ~ Yield,
+    color = ~ Yield,
+    frame = ~ Year,
+    text = ~ Area,
+    locations = ~ cowc,
+    colors = "Blues"
+  )
+fig <- fig %>% colorbar(limits = c(400, 110000),
+                        title = 'Yeild (hg/ha)')
+fig <- fig %>% layout(title = 'World Wheat Yield <br>Source:FAO',
+                      geo = g)
+fig
+
+
+```
+
