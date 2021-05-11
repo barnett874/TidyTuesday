@@ -1,0 +1,143 @@
+---
+title: "2021-5-log"
+author: "shao"
+date: "5/1/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+```{r}
+data <- tidytuesdayR::tt_load('2021-05-04')
+```
+
+```{r}
+glimpse(data)
+
+class(data)
+```
+
+```{r}
+water <- data$water
+glimpse(water)
+```
+
+```{r}
+unique(water$country_name)
+
+water %>% 
+  group_by(country_name) %>% 
+  summarise(count = n()) %>% 
+  arrange(desc(count))
+```
+
+```{r}
+water %>% 
+  filter(country_name == "Uganda") %>% 
+  filter(lon_deg > 29.5 & lon_deg < 35) %>% 
+  filter(lat_deg > -2 & lat_deg < 5) %>% 
+  ggplot(aes(x = lon_deg, y = lat_deg, color = status_id)) + 
+  geom_point(alpha = .3) + 
+  guides(color = guide_legend(override.aes = list(alpha = 1)))
+  
+```
+
+
+
+```{r}
+library(ggmap)
+library(tidyverse)
+
+
+list <- water %>% 
+  mutate(water_source = str_remove(water_source, "Undefined |Protected |Unprotected ")) %>% 
+  count(water_source) %>% 
+  filter(n > 10000) %>%
+  .$water_source
+
+water %>%
+  filter(country_name == "Uganda") %>%
+  filter(lon_deg > 29.5 & lon_deg < 35) %>%
+  filter(lat_deg > -2 & lat_deg < 5) %>%
+  mutate(water_source = str_remove(water_source, "Undefined|Protected|Unprotected ")) %>%
+  filter(!is.na(water_source)& water_source %in% list) %>% 
+  qmplot(
+    lon_deg,
+    lat_deg,
+    data = .,
+    maptype = 'toner-hybrid',
+    color = water_source,
+    size = I(.1),
+    alpha = I(.3)
+  ) +
+  guides(color = guide_legend(override.aes = list(alpha = 1, size = 3))) +
+  ggprism::scale_color_prism()
+
+```
+
+
+
+```{r}
+water %>%
+  filter(country_name == "Uganda") %>%
+  filter(lon_deg > 29.5 & lon_deg < 35) %>%
+  filter(lat_deg > -2 & lat_deg < 5) %>%
+  filter(!is.na(pay)) %>% 
+  mutate(pay = case_when(
+    pay == "No tarrif" | pay == "$0.00 None" ~ "No",
+    pay == "Don't Know" ~ "Don't Know",
+    TRUE ~ "Yes"
+  )) %>% 
+  qmplot(
+    lon_deg,
+    lat_deg,
+    data = .,
+    maptype = 'toner-hybrid',
+    color = pay,
+    size = I(.1),
+    alpha = I(.3)
+  ) +
+  guides(color = guide_legend(override.aes = list(alpha = 1, size = 3))) +
+  ggprism::scale_color_prism() + facet_wrap(~water_source)
+```
+
+```{r}
+
+
+water %>% 
+  filter(!is.na(country_name)) %>% 
+  group_by(country_name, status_id) %>% 
+  summarise(n = n()) %>% 
+  ggplot(aes(x = fct_reorder(country_name, n), y = n, fill = status_id)) + 
+  geom_bar(stat = 'identity') + 
+  theme(
+    axis.text.x = element_text(angle = 45,
+                               hjust = 1)
+  )
+
+water %>%
+  filter(!is.na(country_name)) %>% 
+  mutate(pay = case_when(
+    pay == "No tarrif" | pay == "$0.00 None" ~ "No",
+    pay == "Don't Know" ~ "Don't Know",
+    TRUE ~ "Yes"
+  )) %>% 
+  filter(pay == "Yes") %>% 
+  group_by(country_name, pay) %>% 
+  summarise(n = n()) %>% 
+  ggplot(aes(x = fct_reorder(country_name, n, .fun = max), y = n, fill = pay)) + 
+  theme_bw() + 
+  scale_y_continuous(expand = expansion(c(0,0.1))) + 
+  scale_x_discrete(expand = expansion(c(0.05,0.05))) + 
+  geom_bar(stat = "identity") +
+    theme(
+    axis.text.x = element_text(angle = 45,
+                               hjust = 1,
+                               vjust = 1),
+    legend.position = "none",
+    panel.grid.major.x = element_blank()
+  )
+
+
+```
