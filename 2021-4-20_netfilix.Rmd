@@ -1,0 +1,212 @@
+---
+title: "Netflix_week17"
+author: "shao"
+date: "5/11/2021"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 120
+  chunk_output_type: console
+---
+
+**Netflix is an application that keeps growing bigger and faster with its popularity, shows and content. This is an EDA
+or a story telling through its data along with a content-based recommendation system and a wide range of different
+graphs and visuals.** .center{![](https://media.giphy.com/media/oenruB2DKC7p6/giphy.gif)}
+
+The python source code is from [here](https://www.kaggle.com/niharika41298/netflix-visualizations-recommendation-eda)
+
+```{python}
+import numpy as np # linear algebra
+import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)import seaborn as sns
+import matplotlib.pyplot as plt
+import seaborn as sns
+import matplotlib.pyplot as plt
+```
+
+```{r}
+library(tidyverse)
+library(skimr)
+```
+
+
+
+```{r}
+# Loading the dataset
+data <- tidytuesdayR::tt_load('2021-04-20')
+netfix_dta <- data$netflix_titles
+# install a module if your python don't have
+# reticulate::py_install('seaborn',pip = TRUE) 
+```
+
+Pass the data to Python from R in rstudio
+
+```{python}
+
+netflix_overall=r.netfix_dta
+netflix_overall.head()
+
+```
+
+Also, you can do the same thing using **R**
+
+
+```{r}
+head(netfix_dta)
+```
+Or
+
+```{r}
+glimpse(netfix_dta)
+```
+
+
+Therefore, it is clear that the dataset contains 12 columns for exploratory analysis.
+
+```{python}
+netflix_overall.count()
+```
+
+Also, in R you can do it better.
+
+```{r}
+skim(netfix_dta)
+```
+
+
+```{python}
+
+netflix_shows=netflix_overall[netflix_overall['type']=='TV Show']
+netflix_shows.head()
+```
+In R, you can use pipe to repeat, which makes your script easy to read.
+```{r}
+netflix_shows <- netfix_dta %>%
+  filter(type == "TV Show")
+
+head(netflix_shows)
+```
+
+
+```{python}
+
+netflix_movies=netflix_overall[netflix_overall['type']=='Movie']
+```
+
+```{r}
+netflix_movies <- netfix_dta %>%
+  filter(type == "Movie")
+```
+
+# Analysis of Movies vs TV Shows.
+
+```{python}
+
+sns.set(style="darkgrid") 
+ax = sns.countplot(x="type", data=netflix_overall, palette="Set2")
+plt.show()
+```
+In R
+```{r}
+netfix_dta %>% 
+  ggplot(aes(x = fct_rev(type), fill = type)) + 
+  geom_bar() + 
+  theme_bw()
+```
+
+
+```{python} md
+
+It is evident that there are more Movies on Netflix than TV shows.
+
+```{python} md
+
+# If a producer wants to release some content, which month must he do so?( Month when least amount of content is added)
+
+```{python}
+netflix_date = netflix_shows[['date_added']].dropna()
+netflix_date['year'] = netflix_date['date_added'].apply(lambda x : x.split(', ')[-1])
+netflix_date['month'] = netflix_date['date_added'].apply(lambda x : x.lstrip().split(' ')[0])
+
+month_order = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][::-1]
+df = netflix_date.groupby('year')['month'].value_counts().unstack().fillna(0)[month_order].T
+plt.figure(figsize=(10, 7), dpi=200)
+plt.pcolor(df, cmap='afmhot_r', edgecolors='white', linewidths=2) # heatmap
+plt.xticks(np.arange(0.5, len(df.columns), 1), df.columns, fontsize=7, fontfamily='serif')
+plt.yticks(np.arange(0.5, len(df.index), 1), df.index, fontsize=7, fontfamily='serif')
+
+plt.title('Netflix Contents Update', fontsize=12, fontfamily='calibri', fontweight='bold', position=(0.20, 1.0+0.02))
+cbar = plt.colorbar()
+
+cbar.ax.tick_params(labelsize=8) 
+cbar.ax.minorticks_on()
+plt.show()
+```
+
+```{r}
+library(lubridate)
+library(viridis)
+
+netfix_dta %>% 
+  select(date_added) %>% 
+  mutate(date_added = mdy(date_added),
+         month = month(date_added, label = TRUE, abbr = FALSE),
+         year = year(date_added)) %>% 
+  group_by(year, month) %>% 
+  filter(!is.na(month)) %>% 
+  summarise(contents = n()) %>% 
+  ggplot(aes(x = year, y = fct_rev(month), fill = contents)) + 
+  geom_tile() + 
+  viridis::scale_fill_viridis(option = "A") + 
+  labs(title = 'Netflix Contents Update',
+       x = '',
+       y = '')
+```
+
+```{python} md
+
+If the latest year 2019 is considered, January and December were the months when comparatively much less content was
+released.Therefore, these months may be a good choice for the success of a new release!
+
+```{python} md
+
+# Movie ratings analysis
+
+```{python}
+plt.figure(figsize=(12,10))
+sns.set(style="darkgrid")
+ax = sns.countplot(x="rating", data=netflix_movies, palette="Set2", order=netflix_movies['rating'].value_counts().index[0:15])
+plt.show()
+```
+
+In R
+```{r}
+netfix_dta %>% 
+  group_by(rating) %>% 
+  summarise(n = n()) %>% 
+  filter(!is.na(rating)) %>% 
+  ggplot(aes(x = fct_reorder(rating,n, .desc = TRUE), y = n, fill = rating)) + 
+  geom_bar(stat = "identity") + 
+  scale_y_continuous(expand = expansion(c(0,.1))) + 
+  labs(
+    x = 'Rating',
+    y = 'Count'
+  )
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
