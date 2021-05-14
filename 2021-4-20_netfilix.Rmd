@@ -99,7 +99,7 @@ netflix_movies <- netfix_dta %>%
 # Analysis of Movies vs TV Shows.
 
 ```{python}
-
+plt.figure(figsize=(10, 7))
 sns.set(style="darkgrid") 
 ax = sns.countplot(x="type", data=netflix_overall, palette="Set2")
 plt.show()
@@ -153,6 +153,7 @@ netfix_dta %>%
   group_by(year, month) %>% 
   filter(!is.na(month)) %>% 
   summarise(contents = n()) %>% 
+  complete(year, month, fill = list(contents = 0)) %>% view()
   ggplot(aes(x = year, y = fct_rev(month), fill = contents)) + 
   geom_tile() + 
   viridis::scale_fill_viridis(option = "A") + 
@@ -393,7 +394,7 @@ netflix_movies %>%
 
 
 ```{python}
-matplotlib.use('TkAgg')
+
 g={k: v for k, v in sorted(g.items(), key=lambda item: item[1], reverse= True)}
 g
 fig, ax = plt.subplots()
@@ -454,13 +455,12 @@ fig.show()
 library(kableExtra)
 netflix_shows %>% 
   select(title, duration) %>% 
-  separate(duration, ' ',into = c('duration','season')) %>% 
-  mutate(duration = as.numeric(duration)) %>% 
+  mutate(duration = parse_number(duration)) %>% 
   arrange(desc(duration)) %>% 
   kbl() %>% 
   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
-```
+``` 
 
 
 
