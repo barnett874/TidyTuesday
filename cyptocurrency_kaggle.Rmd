@@ -1,0 +1,42 @@
+---
+title: "cyptocurrency"
+author: "shao"
+date: "5/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+
+```
+
+```{r}
+bitcoin <- read_csv('cyptocurrency/Bitcoin.csv')
+eth <- read_csv('cyptocurrency/Ethereum.csv')
+
+```
+
+```{r}
+head(bitcoin)
+
+bitcoin %>%
+  filter(Date > "2020-1-1") %>%
+  select(2:6) %>% 
+  gather("Key","Price", -Date) %>% 
+  ggplot(aes(x = Date, y = Price, color = Key)) + 
+  geom_line()
+  # ggbreak::scale_y_break(c(20000,50000))
+
+
+eth %>%
+  filter(Date > "2020-1-1") %>%
+  select(2:6) %>% 
+  gather("Key","Price", -Date) %>% 
+  ggplot(aes(x = Date, y = Price, color = Key)) + 
+  geom_line()
+```
+

@@ -6,7 +6,7 @@ output: html_document
 editor_options: 
   markdown: 
     wrap: 120
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 **Netflix is an application that keeps growing bigger and faster with its popularity, shows and content. This is an EDA
@@ -27,8 +27,6 @@ library(tidyverse)
 library(skimr)
 ```
 
-
-
 ```{r}
 # Loading the dataset
 data <- tidytuesdayR::tt_load('2021-04-20')
@@ -48,16 +46,15 @@ netflix_overall.head()
 
 Also, you can do the same thing using **R**
 
-
 ```{r}
 head(netfix_dta)
 ```
+
 Or
 
 ```{r}
 glimpse(netfix_dta)
 ```
-
 
 Therefore, it is clear that the dataset contains 12 columns for exploratory analysis.
 
@@ -71,20 +68,20 @@ Also, in R you can do it better.
 skim(netfix_dta)
 ```
 
-
 ```{python}
 
 netflix_shows=netflix_overall[netflix_overall['type']=='TV Show']
 netflix_shows.head()
 ```
+
 In R, you can use pipe to repeat, which makes your script easy to read.
+
 ```{r}
 netflix_shows <- netfix_dta %>%
   filter(type == "TV Show")
 
 head(netflix_shows)
 ```
-
 
 ```{python}
 
@@ -103,8 +100,11 @@ plt.figure(figsize=(10, 7))
 sns.set(style="darkgrid") 
 ax = sns.countplot(x="type", data=netflix_overall, palette="Set2")
 plt.show()
+
 ```
+
 In R
+
 ```{r}
 netfix_dta %>% 
   ggplot(aes(x = fct_rev(type), fill = type)) + 
@@ -113,11 +113,8 @@ netfix_dta %>%
 ```
 
 
-```{python} md
 
 It is evident that there are more Movies on Netflix than TV shows.
-
-```{python} md
 
 # If a producer wants to release some content, which month must he do so?( Month when least amount of content is added)
 
@@ -128,7 +125,7 @@ netflix_date['month'] = netflix_date['date_added'].apply(lambda x : x.lstrip().s
 
 month_order = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][::-1]
 df = netflix_date.groupby('year')['month'].value_counts().unstack().fillna(0)[month_order].T
-plt.figure(figsize=(10, 7), dpi=200)
+plt.figure(num = 2, figsize=(10, 7), dpi=200)
 plt.pcolor(df, cmap='afmhot_r', edgecolors='white', linewidths=2) # heatmap
 plt.xticks(np.arange(0.5, len(df.columns), 1), df.columns, fontsize=7, fontfamily='serif')
 plt.yticks(np.arange(0.5, len(df.index), 1), df.index, fontsize=7, fontfamily='serif')
@@ -153,7 +150,7 @@ netfix_dta %>%
   group_by(year, month) %>% 
   filter(!is.na(month)) %>% 
   summarise(contents = n()) %>% 
-  complete(year, month, fill = list(contents = 0)) %>% view()
+  complete(year, month, fill = list(contents = 0)) %>%
   ggplot(aes(x = year, y = fct_rev(month), fill = contents)) + 
   geom_tile() + 
   viridis::scale_fill_viridis(option = "A") + 
@@ -162,7 +159,6 @@ netfix_dta %>%
        y = '')
 ```
 
-
 # Movie ratings analysis
 
 ```{python}
@@ -170,9 +166,11 @@ plt.figure(figsize=(12,10))
 sns.set(style="darkgrid")
 ax = sns.countplot(x="rating", data=netflix_movies, palette="Set2", order=netflix_movies['rating'].value_counts().index[0:15])
 plt.show()
+
 ```
 
 In R
+
 ```{r}
 netfix_dta %>% 
   group_by(rating) %>% 
@@ -203,6 +201,7 @@ ratings.head()
 ```
 
 In R
+
 ```{r}
 imdb_ratings <- read_csv('netflix/IMDb ratings.csv') %>% 
   select(1,2)
@@ -258,9 +257,7 @@ fig <- plot_ly(
   branchvalues = 'total'
 )
 
-fig
 ```
-
 
 ```{python}
 fig =px.sunburst(
@@ -271,7 +268,6 @@ fig =px.sunburst(
 fig.show()
 
 ```
-
 
 Countries with highest rated content.
 
@@ -320,6 +316,7 @@ plt.figure(figsize=(12,10))
 sns.set(style="darkgrid")
 ax = sns.countplot(y="release_year", data=netflix_movies, palette="Set2", order=netflix_movies['release_year'].value_counts().index[0:15])
 plt.show()
+
 ```
 
 ```{r}
@@ -334,7 +331,6 @@ netflix_movies %>%
   ggsci::scale_fill_simpsons()
 ```
 
-
 # Analysis of duration of movies¶
 
 ```{python}
@@ -345,6 +341,7 @@ plt.figure(figsize=(8,8))
 sns.set(style="darkgrid")
 sns.kdeplot(data=netflix_movies['duration'], shade=True)
 plt.show()
+
 ```
 
 ```{r}
@@ -378,6 +375,7 @@ wordcloud = WordCloud(max_words=1000000,background_color="white").generate(str(t
 plt.imshow(wordcloud,interpolation="bilinear")
 plt.axis("off")
 plt.show()
+
 ```
 
 ```{r}
@@ -391,7 +389,6 @@ netflix_movies %>%
 
 
 ```
-
 
 ```{python}
 
@@ -408,6 +405,7 @@ ax.set_ylabel("Count of movies")
 # set a title
 ax.set_title("Genres")
 plt.show()
+
 ```
 
 ```{r}
@@ -448,7 +446,8 @@ import plotly.graph_objects as go
 # Set the width and height of the figure
 plt.figure(figsize=(15,15))
 fig = go.Figure(data=[go.Table(header=dict(values=['Title', 'No of seasons']), cells=dict(values=[bottom['title'],bottom['no_of_seasons']],fill_color='lavender'))])
-fig.show()
+plt.show()
+
 ```
 
 ```{r}
@@ -460,18 +459,4 @@ netflix_shows %>%
   kbl() %>% 
   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
-``` 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+```
