@@ -1,0 +1,159 @@
+---
+title: "california_housing"
+author: "shao"
+date: "5/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+house <- read.csv("california_housing/housing.csv")
+glimpse(house)
+```
+
+```{r}
+skimr::skim(house)
+house %>% distinct(ocean_proximity)
+
+```
+
+
+```{r}
+library(ggmap)
+p_value <- qmplot(
+  x = longitude,
+  y = latitude,
+  data = house,
+  maptype = "toner-lite",
+  color = median_house_value
+) + 
+  viridis::scale_color_viridis()
+
+p_location <- qmplot(
+  x = longitude,
+  y = latitude,
+  data = house,
+  maptype = "toner-lite",
+  color = ocean_proximity
+)
+```
+
+```{r}
+library(patchwork)
+
+p_value + p_location
+```
+```{r}
+qmplot(
+  x = longitude,
+  y = latitude,
+  data = house,
+  maptype = "toner-lite",
+  color = median_income
+) + 
+  viridis::scale_color_viridis(option = "A")
+```
+
+```{r}
+qmplot(
+  x = longitude,
+  y = latitude,
+  data = house,
+  maptype = "toner-lite",
+  color = total_bedrooms
+) + 
+  viridis::scale_color_viridis(option = "A")
+```
+
+```{r}
+
+ggplot(house, aes(x = total_rooms, y = total_bedrooms)) + 
+  geom_point(aes(color = median_income)) + 
+  viridis::scale_color_viridis(option = "A")
+
+ggplot(house, aes(x = total_rooms, y = total_bedrooms)) + 
+  geom_point(aes(color = households)) + 
+  viridis::scale_color_viridis(option = "A")
+
+```
+
+```{r}
+library(scales)
+ggplot(house,aes(x = median_income, y = median_house_value)) + 
+  geom_point(aes(color = ocean_proximity)) + 
+  scale_y_continuous(expand = expansion(c(.1,.1))) + 
+  # geom_smooth(method  = 'lm') + 
+  ggsci::scale_color_npg() + 
+  theme_bw() +
+  facet_wrap(~ocean_proximity)
+
+ggplot(house,aes(x = fct_reorder(ocean_proximity, median_house_value, .desc = T), 
+                 y = median_house_value, 
+                 fill = ocean_proximity)) + 
+  geom_boxplot(width = .5) + 
+  # stat_summary(geom = 'boxplot', fun = "mean", width = .7) + 
+  # stat_summary(geom = 'errorbar', fun.data = mean_se, width = .2) + 
+  scale_y_continuous(labels = comma) + 
+  theme_classic() + 
+  labs(
+    title = 'Median house value vs location',
+    y = 'Median house value ($)',
+    x = 'Ocean proximity'
+  )
+
+
+
+```
+
+```{r}
+library(rstatix)
+library(ggpubr)
+library(agricolae)
+
+house$ocean_proximity <- as.factor(house$ocean_proximity)
+house <- house %>% 
+  mutate(ocean_proximity = fct_reorder(ocean_proximity, median_income, .desc = T))
+
+aov_res <- aov(median_income ~ ocean_proximity, data = house)
+
+diff <- LSD.test(aov_res, trt = "ocean_proximity") 
+
+diff_group <- diff$groups %>% 
+  mutate(ocean_proximity = rownames(.))
+
+
+
+t_res <- t_test(median_income ~ ocean_proximity, data = house)
+
+
+t_res <- t_res %>% 
+  add_xy_position(fun = 'mean_se', x = "ocean_proximity") 
+t_res
+
+p_bar <- ggplot(house,
+       aes(
+         x = ocean_proximity,
+         y = median_income,
+         fill = ocean_proximity
+       )) +
+  # geom_boxplot(width = .5) +
+  stat_summary(geom = 'bar', fun.data = mean_se, width = .7) +
+  stat_summary(geom = 'errorbar',
+               fun.data = mean_se,
+               width = .2) + 
+  geom_text(diff_group, mapping = aes(x = ocean_proximity , y = median_income, label = groups), vjust = -2) + 
+  scale_y_continuous(labels = comma, expand = expansion(c(0, 0.1))) +
+  theme_classic() +
+  labs(title = 'Median income vs location',
+       y = 'Median income (thousand $ per month)',
+       x = 'Ocean proximity')
+
+p_bar
+
+```
+

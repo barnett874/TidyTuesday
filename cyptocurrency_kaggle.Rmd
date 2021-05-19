@@ -24,7 +24,7 @@ eth <- read_csv('cyptocurrency/Ethereum.csv')
 head(bitcoin)
 
 bitcoin %>%
-  filter(Date > "2020-1-1") %>%
+  # filter(Date > "2020-1-1") %>%
   select(2:6) %>% 
   gather("Key","Price", -Date) %>% 
   ggplot(aes(x = Date, y = Price, color = Key)) + 
@@ -33,10 +33,17 @@ bitcoin %>%
 
 
 eth %>%
-  filter(Date > "2020-1-1") %>%
+  # filter(Date > "2020-1-1") %>%
   select(2:6) %>% 
   gather("Key","Price", -Date) %>% 
   ggplot(aes(x = Date, y = Price, color = Key)) + 
-  geom_line()
+  geom_line() + 
+  labs(
+    title = "Ethereum Price",
+    x = "Price",
+    y = "Date"
+  ) + 
+  ggthemes::theme_economist()
+  
 ```
 
