@@ -1,0 +1,116 @@
+---
+title: "mario_cart"
+author: "shao"
+date: "5/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+tuesdata <- tidytuesdayR::tt_load(2021, week = 22)
+drives <- tuesdata$drivers
+records <- tuesdata$records
+```
+
+How did the world records develop over time?
+```{r}
+library(tidyverse)
+
+records %>% 
+  ggplot(aes(x = date, y = time, colour = track)) + 
+  geom_line() + 
+  facet_wrap(~type + shortcut, scales = 'free')
+
+
+```
+
+Which track is the fastest?
+```{r}
+records %>% 
+  group_by(track, type, shortcut) %>% 
+  slice_tail(n = 1) %>% 
+  arrange(time)
+  
+```
+
+For which track did the world record improve the most?
+```{r}
+records %>% 
+  group_by(track, type, shortcut) %>% 
+  summarise(min = min(time), max = max(time)) %>% 
+  mutate(improvement = max-min) %>% 
+  arrange(desc(improvement))
+```
+
+For how many tracks have shortcuts been discovered?
+```{r}
+records %>% 
+  filter(shortcut == 'Yes') %>% 
+  distinct(track)
+```
+
+When were shortcuts discovered?
+
+```{r}
+records %>% 
+  filter(shortcut == 'Yes') %>% 
+  group_by(track) %>% 
+  slice_head(n = 1) %>% 
+  select(track, date) %>% 
+  arrange(desc(date)) 
+```
+
+On which track does the shortcut save the most time?
+
+```{r}
+records %>% 
+  filter(type == "Three Lap") %>% 
+  select(track, type, shortcut,date,time) %>% 
+  group_by(track, type, shortcut) %>% 
+  slice_tail(n = 1) %>% 
+  select(-date)%>% 
+  spread(key = "shortcut", value = "time") %>% 
+  na.omit() %>% 
+  mutate(save = No - Yes) %>% 
+  arrange(desc(save))
+```
+
+Which is the longest standing world record?
+```{r}
+records %>% 
+  group_by(track, type, shortcut) %>% 
+  arrange(track, type, shortcut,date) %>% 
+  mutate(duration = lead(date) - date) %>% 
+  arrange(desc(duration))
+```
+
+Who is the player with the most world records?
+```{r}
+records %>% 
+  count(player, sort = TRUE) %>% 
+  head(10) %>% 
+  ggplot(aes(x = fct_reorder(player, n, .desc = T), y = n, fill = fct_reorder(player, n, .desc = T))) + 
+  geom_bar(stat = 'identity', show.legend = F, width = .7, alpha = .7) +
+  ggsci::scale_fill_npg() + 
+  scale_y_continuous(expand = expansion(c(0,.1)))
+```
+
+Who are recent players?
+
+```{r}
+records %>% 
+  arrange(desc(date)) %>% 
+  filter(date >= "2021-01-01") %>% 
+  count(player, sort = T) %>% 
+  ggplot(aes(x = fct_reorder(player, n, .desc = T), y = n, fill = fct_reorder(player, n, .desc = T))) + 
+  geom_bar(stat = 'identity', show.legend = F, width = .7, alpha = .7) +
+  ggsci::scale_fill_npg() + 
+  scale_y_continuous(expand = expansion(c(0,.1)))
+  
+```
+
+
