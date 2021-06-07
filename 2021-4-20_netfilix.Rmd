@@ -112,8 +112,6 @@ netfix_dta %>%
   theme_bw()
 ```
 
-
-
 It is evident that there are more Movies on Netflix than TV shows.
 
 # If a producer wants to release some content, which month must he do so?( Month when least amount of content is added)

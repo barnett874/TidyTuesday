@@ -58,6 +58,7 @@ When were shortcuts discovered?
 ```{r}
 records %>% 
   filter(shortcut == 'Yes') %>% 
+  # arrange(track, type, shortcut, date) %>% 
   group_by(track) %>% 
   slice_head(n = 1) %>% 
   select(track, date) %>% 
