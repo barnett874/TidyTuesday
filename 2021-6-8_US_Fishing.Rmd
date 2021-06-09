@@ -1,0 +1,203 @@
+---
+title: "US_Fishing"
+author: "shao"
+date: "6/9/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+tuesdata <- tidytuesdayR::tt_load('2021-06-08')
+library(tidyverse)
+fishing <- tuesdata$fishing
+fishing <- fishing %>% 
+  filter(!is.na(values)) %>% 
+  mutate(species = case_when(
+    str_detect(species, "Cisco") ~ "Cisco",
+    str_detect(species, "Rock Bass") ~ "Rock Bass",
+    str_detect(species, "Walleye") ~ "Walleye",
+    str_detect(species, "Lake Trout") ~ "Lake Trout",
+    str_detect(species, "Catfish") ~ "Channel Catfish",
+    TRUE ~ species
+  )) 
+```
+
+```{r}
+
+summary(fishing)
+fishing %>% names()
+fishing %>% count(species)
+
+fishing %>% 
+  filter(!is.na(values)) %>% 
+  ggplot(aes(x = year, y = values, color = lake)) + 
+  stat_summary(geom = 'line', fun = sum) + 
+  facet_wrap(~lake, scale = "free_y")
+```
+
+```{r}
+fishing %>% 
+  dplyr::filter(lake == "Erie") %>% 
+  dplyr::filter(!is.na(values)) %>% 
+  group_by(year,species, region) %>% 
+  summarise(sum = sum(values)) %>% 
+  group_by(species) %>% 
+  filter(n()>600) %>% 
+  ggplot(aes(x = year, y = sum, color = region)) + 
+  geom_line() +
+  facet_wrap(~species, scale = 'free_y', ncol = 1) +
+  theme(
+    legend.position = "none"
+  )
+
+fishing %>% 
+  dplyr::filter(lake == "Huron") %>% 
+  dplyr::filter(!is.na(values)) %>% 
+  group_by(year,species, region) %>% 
+  summarise(sum = sum(values)) %>% 
+  group_by(species) %>% 
+  filter(n()>600) %>% 
+  ggplot(aes(x = year, y = sum, color = region)) + 
+  geom_line() +
+  facet_wrap(~species, scale = 'free_y',ncol = 1) +
+  theme(
+    legend.position = "none"
+  )
+```
+
+```{r}
+fish_name <- fishing %>% 
+  filter(!is.na(values)) %>% 
+  # filter(year >= 2005) %>% 
+  group_by(species) %>% 
+  summarise(sum = sum(values)) %>% 
+  arrange(desc(sum)) %>% 
+  head(10) %>% pull(species)
+
+fishing %>% 
+  filter(!is.na(values)) %>% 
+  filter(species %in% fish_name) %>% 
+  group_by(year, species) %>% 
+  summarise(sum = sum(values),.groups = 'drop') %>% 
+  ggplot(aes(x = year, y = sum, color = species)) +
+  ggsci::scale_color_npg() +
+  geom_line(show.legend = T) + 
+  scale_y_continuous(expand = expansion(c(0,.1))) +
+  theme_bw()
+```
+
+```{r fig.width= 15}
+library(ComplexHeatmap)
+library(circlize)
+fishing %>% 
+  filter(!is.na(values)) %>% 
+  group_by(year, species) %>% 
+  summarise(sum = sum(values),.groups = 'drop') %>% 
+  spread(key = "year", value = "sum", fill = 0) %>% 
+  column_to_rownames("species") %>% 
+  mutate(across(everything(),~(.x - mean(.x))/sd(.x)),
+  .names = NULL) %>%
+  pheatmap::pheatmap(cluster_cols = F,fontsize = 6)
+  # ComplexHeatmap::Heatmap(
+  #   col = colorRamp2(c(0, 500, 30000), c("black","yellow", "blue2"),
+  #                    transparency  = .2),
+  #   cluster_columns = F,
+  #   row_names_gp = gpar(fontsize = 8),
+  #   column_names_gp = gpar(fontsize = 8)
+  # )
+
+
+```
+
+```{r}
+library(RColorBrewer)
+
+fishing %>% 
+  filter(!is.na(values)) %>% 
+  select(year, lake, species, values) %>% 
+  group_by(year, lake, species) %>% 
+  summarise(mean = mean(values)) %>% 
+  group_by(year, lake) %>% 
+  mutate(species_pct = mean/sum(mean)) %>% 
+  arrange(year, lake, species_pct) %>% 
+  slice_tail(n = 1) %>% 
+  group_by(lake) %>% 
+  count(species, sort = T) %>% 
+  filter(n >= 10) %>% 
+  ggplot(aes(x = lake, y = n, fill = species)) + 
+  geom_bar(stat = 'identity', position = 'stack', width = .6) + 
+  scale_y_continuous(expand = expansion(c(0,.1))) + 
+  scale_fill_manual(values = colorRampPalette(brewer.pal(12, "Set3"))(12)) + 
+  ggprism::theme_prism()
+  
+```
+
+```{r}
+
+matrix <- fishing %>% 
+  filter(!is.na(values)) %>% 
+  group_by(lake, species) %>% 
+  summarise(sum = sum(values),.groups = 'drop') %>% 
+  spread(key = "lake", value = "sum", fill = 0) %>% 
+  column_to_rownames("species") 
+```
+
+```{r}
+library(factoextra)
+res.pca <- prcomp(matrix, scale = TRUE)
+fviz_eig(res.pca)
+
+fviz_pca_ind(res.pca,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+```
+
+```{r}
+
+groups <- as.factor(ifelse(rownames(matrix) %in% fish_name, 'Major_Group', 'Minor_Group'))
+
+
+fviz_pca_ind(res.pca,
+             col.ind = groups, # color by groups
+             # palette = colorRampPalette(brewer.pal(12, "Set3"))(7),
+             addEllipses = TRUE, # Concentration ellipses
+             # gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             ellipse.type = "convex",
+             legend.title = "Groups",
+             repel = TRUE
+             ) 
+  # geom_vline(aes(xintercept = .5), lty = 3, color = 'blue', size= 2)
+```
+
+换个姿势
+```{r}
+
+matrix <- fishing %>% 
+  filter(!is.na(values)) %>% 
+  group_by(lake, species) %>% 
+  summarise(sum = sum(values),.groups = 'drop') %>% 
+  spread(key = "species", value = "sum", fill = 0) %>% 
+  column_to_rownames("lake") 
+```
+
+```{r}
+library(factoextra)
+res.pca <- prcomp(matrix, scale = TRUE)
+fviz_eig(res.pca)
+
+fviz_pca_ind(res.pca,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+```
