@@ -1,0 +1,178 @@
+---
+title: "2021-June-12"
+author: "shao"
+date: "6/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+tuesdata <- tidytuesdayR::tt_load(2021, week = 25)
+
+tweets <- tuesdata$tweets
+```
+你可以使用以下两种方式提取关键词
+# str_match(tweets$text, ">(.+?)</a>")[,2]
+# str_replace(tweets$text, ".*?>(.+?)</a>.*?","\\1") %>% unique()
+
+
+```{r}
+info <- tibble::tribble(
+        ~variable,      ~class,                  ~description,
+       "datetime",    "double",      "Date and time of tweet",
+        "content", "character",              "Text for tweet",
+  "retweet_count",    "double",     "Retweet count for tweet",
+     "like_count",    "double",        "Like count for tweet",
+    "quote_count",    "double", "Quote tweet count for tweet",
+           "text", "character", "Where tweet was posted from",
+       "username", "character",         "Username of Tweeter",
+       "location", "character",       "Location tweeted from",
+      "followers",    "double",    "Followers of the tweeter",
+            "url", "character",      "Canonical url of tweet",
+       "verified",   "logical",           "Is user verified?",
+            "lat",    "double",            "Latitude of user",
+           "long",    "double",           "Longitude of user"
+  )
+```
+
+```{r}
+tweets_washed <- tweets %>% 
+  mutate(platform = str_replace(tweets$text, ".*?>(.+?)</a>.*?","\\1")) %>% 
+  select(-url, -text)
+```
+
+
+```{r}
+tweets_washed <- tweets_washed %>% 
+  mutate(lat = ifelse(location  == 'iPhone: 34.704040,-86.722909',34.704040,lat),
+         long = ifelse(location  == 'iPhone: 34.704040,-86.722909',-86.722909,long))
+
+```
+
+iPhone: 34.704040,-86.722909 = madison alabama
+he/they	= Chalmazel, France
+At the home office = Gaithersburg, Maryland
+Forde-Obama Hall = New York
+Worldwide = Manchester, England
+Kevin.Elder@GCSU.edu = Milledgeville, Georgia
+World = Dubayy, United Arab
+God's earth = Beijing
+OAK / NYC / ATL / The World = NA
+SP = La Spezia, Italy
+Lil’ Rudyshire = NA
+
+```{r}
+library(geonames)
+options(geonamesUsername="barnett874")
+
+findcountry(25.252889, 55.17696777)
+findcountry(40.712728, -74.00601520)
+findcountry <- function(lat,long){
+  if(round(lat,2) == 25.25 & round(long,2) == 55.18){return("United Arab")}else{
+    country = GNcountryCode(lat,long)$countryName; return(country)
+  }
+}
+round(55.17696777,2)
+geo_country <- geo %>% 
+  mutate(country = purrr::map2_chr(lat,long, ~findcountry(.x,.y)))
+
+# 25.252889	55.17696777	<NULL>	
+
+geo_country <- geo_country %>% 
+  unnest(country) %>% 
+  mutate(lat = as.double(lat),
+         long = as.double(long))
+
+tweets_washed <- left_join(tweets_washed,geo_country,by = c('lat','long'))
+at_name <- tweets_washed$content %>% 
+  str_split(pattern = ' ') %>% 
+  unlist() %>% 
+  str_extract('@.*') %>% 
+  na.omit() %>% 
+  as_tibble()
+```
+
+
+```{r}
+extract_at_name <- function(text) {
+  str_split(text, pattern = ' ') %>%
+    unlist() %>%
+    str_extract('@.*') %>%
+    na.omit() %>%
+    as_tibble()
+}
+
+tweets_washed <- tweets_washed %>% 
+  mutate(at_name = purrr::map(content, ~extract_at_name(.x))) %>% 
+  unnest(at_name)
+```
+
+```{r}
+theme_set(theme_light())
+map_data <- map_data('world')
+
+tweets_washed %>% 
+  filter(country == "United Arab")
+ggplot() + 
+  geom_polygon(map_data, mapping = aes(x = long, y = lat, group = group), fill = "white", color = 'gray60') + 
+  geom_point(tweets_washed %>% drop_na(lat), 
+             mapping = aes(x = long, y = lat, color = country, size = like_count/followers)) + 
+  theme(
+    legend.position = 'none'
+  )
+```
+```{r}
+tweets_washed %>% count(username, sort = T)
+tweets_washed %>% 
+  distinct(content,username, like_count, followers) %>% 
+  group_by(username, followers) %>% 
+  summarise(n = n(), like_count_pct = sum(like_count)/n) %>% 
+  ggplot(aes(x = followers,y = like_count_pct, size = n, color = username)) + 
+  geom_point() +
+  theme(legend.position = 'none')
+```
+
+```{r}
+tweets_washed %>% 
+  count(platform, sort = T) %>% 
+  ggpubr::ggbarplot(., x = 'platform', y = 'n', fill = 'platform', width = .5) + 
+  geom_text(aes(label = n), vjust = -2) + 
+  scale_y_continuous(expand = expansion(c(0,.2))) + 
+  theme(
+    axis.text.x = element_text(angle = 45,vjust = 1, hjust = 1)
+  )
+
+```
+
+
+```{r}
+tweets_washed %>% 
+  distinct(content, username) %>% 
+  count(username,sort = T) %>% 
+  slice(1:5) %>% 
+  ggpubr::ggbarplot(., x = 'username', y = 'n', fill = 'username', width = .5) + 
+  geom_text(aes(label = n), vjust = -2) + 
+  scale_y_continuous(expand = expansion(c(0,.2))) + 
+  theme(
+    axis.text.x = element_text(angle = 45,vjust = 1, hjust = 1),
+    legend.position = 'none'
+  )
+```
+
+```{r}
+tweets_washed %>% 
+  distinct(datetime, content, username) %>% 
+  mutate(time = lubridate::as_date(datetime)) %>% 
+  group_by(time) %>% 
+  summarise(n = n()) %>% 
+  ggplot(aes(x = time)) + geom_histogram(bins = 8)
+```
+
+
