@@ -1,0 +1,222 @@
+---
+title: "Park Access"
+author: "shao"
+date: "6/22/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+```{r}
+library(tidyverse)
+tuesdata <- tidytuesdayR::tt_load('2021-06-22')
+
+park <- tuesdata$parks
+park
+```
+
+```{r}
+park_info <- tibble::tribble(
+                    ~variable,      ~class,                                                  ~description,
+                       "year",    "double",                                         "Year of measurement",
+                       "rank",    "double",                                                 "Yearly rank",
+                       "city", "character",                                                   "City Name",
+         "med_park_size_data",    "double",                                      "Median park size acres",
+       "med_park_size_points",    "double",                                  "Median park size in points",
+         "park_pct_city_data", "character",                         "Parkland as percentage of city area",
+       "park_pct_city_points",    "double",                           "Parkland as % of city area points",
+         "pct_near_park_data", "character",        "Percent of residents within a 10 minute walk to park",
+       "pct_near_park_points",    "double", "Percent of residents within a 10 minute walk to park points",
+    "spend_per_resident_data", "character",                                "Spending per resident in USD",
+  "spend_per_resident_points",    "double",                             "Spending per resident in points",
+            "basketball_data",    "double",                       "Basketball hoops per 10,000 residents",
+          "basketball_points",    "double",                "Basketball hoops per 10,000 residents points",
+               "dogpark_data",    "double",                             "Dog parks per 100,000 residents",
+             "dogpark_points",    "double",                             "Dog parks per 100,000 residents",
+            "playground_data",    "double",                            "Playgrounds per 10,000 residents",
+          "playground_points",    "double",                     "Playgrounds per 10,000 residents points",
+                "rec_sr_data",    "double",          "Recreation and senior centers per 20,000 residents",
+              "rec_sr_points",    "double",   "Recreation and senior centers per 20,000 residents points",
+              "restroom_data",    "double",                              "Restrooms per 10,000 residents",
+            "restroom_points",    "double",                       "Restrooms per 10,000 residents points",
+          "splashground_data",    "double",          "Splashgrounds and splashpads per 100,000 residents",
+        "splashground_points",    "double",   "Splashgrounds and splashpads per 100,000 residents points",
+           "amenities_points",    "double",                      "Amenities points total (ie play areas)",
+               "total_points",    "double",               "Total points (varies in denominator per/year)",
+                  "total_pct",    "double",                                "Total points as a percentage",
+                   "city_dup", "character",                                        "City duplicated name",
+               "park_benches",    "double",                                      "Number of park benches"
+  )
+park_info
+```
+查看数据
+```{r}
+park %>% count(year)
+```
+
+
+```{r}
+top_city <- park %>% 
+  group_by(year) %>% 
+  slice_head(n = 10) %>% 
+  ungroup() %>% 
+  count(city, sort = TRUE) %>% 
+  filter(n > 5) %>% 
+  pull(city)
+top_city
+```
+
+```{r}
+park %>% count(park_benches)
+```
+park_pct_city_data
+pct_near_park_data
+spend_per_resident_data
+
+```{r}
+park <- park %>%
+  mutate(
+    park_pct_city_data = str_remove(park_pct_city_data,'%') %>% as.integer()/100,
+    pct_near_park_data = str_remove(pct_near_park_data,'%') %>% as.integer()/100,
+    spend_per_resident_data = str_remove(spend_per_resident_data,'\\$') %>% as.integer() 
+  ) 
+```
+
+```{r}
+library(GGally)
+GGally::ggpairs(park %>% filter(city %in% top_city), ggplot2::aes(colour=city), columns = c(2,seq(4,16,by = 2)))
+```
+
+```{r}
+
+park_corr <- function(park, var) {
+  if(is.character(var)){var <- rlang::sym(var)}
+  park %>% group_by(city) %>%
+    summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE))) %>%
+    ggplot(aes(x = rank, y = {{var}})) +
+    geom_point(show.legend = FALSE) +
+    geom_smooth(
+      formula = y ~ x,
+      method = 'lm'
+    ) + 
+    ggpmisc::stat_poly_eq(
+      formula = y ~ x,
+      parse=TRUE
+    )
+}
+park_corr(park, "spend_per_resident_data")
+```
+
+
+```{r}
+
+park_corr(park, "pct_near_park_data")
+
+```
+
+
+```{r}
+park_corr(park, "basketball_data")
+park_factor <- park %>% names()
+
+park_point <- park_factor[str_detect(park_factor,"point")]
+for (i in 1:10) {
+  park_corr(park, park_point[i]) %>% 
+    print()
+}
+```
+
+
+```{r}
+fit <- lm(park, 
+          formula = rank ~ med_park_size_points + park_pct_city_points + pct_near_park_points + dogpark_points + rec_sr_points + restroom_points)
+
+summary(fit)
+AIC(fit)
+# text <- ""
+# for (i in 1:10){
+#   text <- paste(text,'+',park_point[i])
+# }
+```
+
+```{r}
+park %>% 
+  filter( year == 2014)
+```
+
+
+```{r}
+park %>% 
+  group_by(year) %>%
+  summarise(across(where(is.numeric), ~ median(.x))) %>% 
+  ggplot(mapping = aes(x = year, y = restroom_data)) +
+  stat_summary(, geom = "line", fun = ~median(.x))
+```
+
+```{r}
+library(factoextra)
+library(FactoMineR)
+
+pca_data <- park %>% 
+  filter(year == 2020) %>% 
+  select(-1,-2, -ends_with("points"), -city_dup,-park_benches) %>% 
+  column_to_rownames(var = "city") %>% 
+  as.data.frame()
+
+res_pca <- PCA(pca_data)
+get_eig(res_pca)
+fviz_screeplot(res_pca, addlabels = TRUE)
+```
+```{r}
+fviz_pca_ind(res_pca, col.ind = "cos2", 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE # Avoid text overlapping (slow if many points)
+             )
+```
+
+
+
+```{r}
+library(cluster)
+
+km_res <- kmeans(scale(pca_data), centers = 4, nstart = 25)
+fviz_cluster(
+  km_res,
+  palette = ggsci::pal_npg()(4),
+  data = pca_data,
+  ggtheme = theme_bw(),
+  # ellipse.type = 'confidence',
+  repel = TRUE
+)
+
+ggsci::pal_npg()(4)
+```
+
+
+```{r}
+get_pca_ind(res_pca)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
