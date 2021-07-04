@@ -1,0 +1,193 @@
+---
+title: "TIdyTuesday_2021-6-28"
+author: "shao"
+date: "6/30/2021"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+
+tuesdata <- tidytuesdayR::tt_load('2021-06-29')
+```
+
+```{r}
+info <- data.frame(
+  stringsAsFactors = FALSE,
+          variable = c("incident_number",
+                       "date_time_of_call","cal_year","fin_year","type_of_incident",
+                       "pump_count","pump_hours_total","hourly_notional_cost",
+                       "incident_notional_cost","final_description",
+                       "animal_group_parent","originof_call","property_type",
+                       "property_category","special_service_type_category",
+                       "special_service_type","ward_code","ward","borough_code","borough",
+                       "stn_ground_name","uprn","street","usrn",
+                       "postcode_district","easting_m","northing_m","easting_rounded",
+                       "northing_rounded","latitude","longitude"),
+             class = c("double","character","double",
+                       "character","character","character","character",
+                       "double","character","character","character","character",
+                       "character","character","character","character",
+                       "character","character","character","character",
+                       "character","character","character","character","character",
+                       "character","character","double","double","character",
+                       "character"),
+       description = c("Unique incident ID",
+                       "Day and time of call (day/month/year hour:minute)",
+                       "Calendar Year","Fiscal year","Type of incident",
+                       "Pump count (number of trucks)","Pump hours total","Hourly cost",
+                       "Total cost of incident","Final description","Type of animal",
+                       "Where call originated","Property type",
+                       "Property category","Service type category","Service type",
+                       "Ward Code","Ward name","Borough code","Borough name",
+                       "Station name","Unique property reference number","Street name",
+                       "unique street reference number",
+                       "Postal code district","Easting measure","Northing measure",
+                       "Easting rounded","Northing rounded","Lat","Long")
+)
+info
+```
+
+```{r}
+tuesdata
+library(tidyverse)
+animal_rescues <- tuesdata$animal_rescues
+```
+
+
+```{r}
+cases_per_year <- animal_rescues %>% count(fin_year)
+```
+随着时间的增长，案件的发生率逐渐增多。
+```{r}
+number <- cases_per_year$n
+
+plot(number[1:length(number)-1])
+
+cases_other <- number[1:12]
+cases_2020 <- number[1:length(number)-1] %>% 
+  tail(n = 1)
+?t.test
+
+t.test(cases_other, mu = cases_2020)
+```
+
+```{r}
+animal_rescues
+```
+
+```{r}
+animal_rescues %>%
+  ggplot(aes(pump_count)) + 
+  geom_histogram(stat="count",width = .5) + 
+  scale_y_log10()
+```
+
+
+```{r}
+animal_rescues %>% count(property_category, sort = T)
+```
+
+```{r}
+animal_rescues %>% 
+  ggplot(aes(longitude,latitude)) + 
+  geom_point() + 
+  ggthemes::theme_map()
+```
+
+```{r}
+library("ggmap")
+animal_rescues_df <- as.data.frame(animal_rescues) %>% 
+  mutate(longitude = parse_number(longitude),
+         latitude = parse_number(latitude)) %>% 
+  filter(!is.na(longitude),
+         latitude > 0)
+
+qmplot(longitude, latitude, data = animal_rescues_df, zoom = 10, maptype = "toner-lite", color = I("red")) 
+
+
+qmplot(longitude, latitude, data = animal_rescues_df, geom = "blank", 
+       zoom = 14, maptype = "toner-background", darken = .7, legend = "bottomright") + 
+  stat_density_2d(aes(fill = ..level..), geom = "polygon", alpha = .3, color = NA) + 
+  scale_fill_gradient2("Cases", low = "white", mid = "yellow", high = "red", midpoint = 7.5)
+
+```
+
+
+```{r}
+#查看是否有拼写错误
+animal_rescues_df %>%
+  filter(str_detect(animal_group_parent,'dog|Dog|DOG')) %>% 
+  count(animal_group_parent)
+  
+animal_rescues_df <- animal_rescues_df %>% 
+  mutate(animal_group_parent = ifelse(animal_group_parent == 'cat','Cat', animal_group_parent))
+
+animal_rescues_df %>% 
+  mutate(animal_group_parent = ifelse(animal_group_parent == 'cat','Cat', animal_group_parent)) %>% 
+  filter(animal_group_parent %in% c('Dog', 'Cat')) %>% 
+  qmplot(longitude, latitude, data = ., geom = "blank", 
+       zoom = 14, maptype = "toner-background", darken = .7, legend = "bottomright") + 
+  stat_density_2d(aes(fill = ..level..), geom = "polygon", alpha = .3, color = NA) + 
+  scale_fill_gradient2("Cases", low = "white", mid = "yellow", high = "red", midpoint = 7.5) + 
+  facet_wrap(~ animal_group_parent)
+  
+  
+```
+可以看到 猫狗存在南北区分。这可能是跟伦敦的布局有关。
+
+```{r}
+animal_rescues_df %>% 
+  filter(animal_group_parent == 'Cat',
+         special_service_type_category == "Other animal assistance") %>% 
+  count(final_description, sort = TRUE)
+```
+
+救猫任务主要分为四类 高处 地下 水中和其他
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
