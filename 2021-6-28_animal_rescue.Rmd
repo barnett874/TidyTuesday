@@ -94,9 +94,14 @@ animal_rescues %>% count(property_category, sort = T)
 ```
 
 ```{r}
-animal_rescues %>% 
+
+map <- map_data('world')
+british_map <- map %>% filter(subregion == 'Great Britain')
+animal_rescues_df %>% 
   ggplot(aes(longitude,latitude)) + 
+  geom_polygon(british_map, mapping = aes(x = long, y = lat, group = group)) + 
   geom_point() + 
+  coord_map() + 
   ggthemes::theme_map()
 ```
 
